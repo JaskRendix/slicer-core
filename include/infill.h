@@ -6,6 +6,9 @@ struct InfillSegment {
   v3 a, b;
 };
 
-// Generate simple line infill for one island
 std::vector<InfillSegment>
 generateLineInfill(const Island &island, double spacing, double angleDegrees);
+std::vector<InfillSegment> generateGridInfill(const Island &island,
+                                              double spacing);
+std::vector<InfillSegment> generateHexInfill(const Island &island,
+                                             double spacing);

@@ -75,7 +75,6 @@ include/
     offset.h
     perimeters.h
     infill.h
-    infill_grid.h
 
 src/
     triangle.cpp
@@ -88,7 +87,6 @@ src/
     offset.cpp
     perimeters.cpp
     infill.cpp
-    infill_grid.cpp
 
 examples/
     example.cpp

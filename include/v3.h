@@ -8,9 +8,15 @@ public:
   v3() : x_(0), y_(0), z_(0) {}
   v3(double x, double y, double z) : x_(x), y_(y), z_(z) {}
 
+  // Getters
   double getX() const { return x_; }
   double getY() const { return y_; }
   double getZ() const { return z_; }
+
+  // *** Required setters (needed by triangleMesh) ***
+  void setX(double x) { x_ = x; }
+  void setY(double y) { y_ = y; }
+  void setZ(double z) { z_ = z; }
 
   // Basic arithmetic
   v3 operator+(const v3 &o) const {
