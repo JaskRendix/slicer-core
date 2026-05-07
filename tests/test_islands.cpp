@@ -3,10 +3,6 @@
 #include "sliceLayer.h"
 #include "v3.h"
 
-// ------------------------------------------------------------
-// Helpers
-// ------------------------------------------------------------
-
 static SliceLayer::Polyline makeSquare(double half, double z = 0.0) {
     SliceLayer::Polyline p;
     p.points = {
@@ -25,10 +21,6 @@ static SliceLayer::Polyline makeReversed(const SliceLayer::Polyline &poly) {
     return out;
 }
 
-// ------------------------------------------------------------
-// 1. Single outer loop → one island, no holes
-// ------------------------------------------------------------
-
 TEST(Islands, SingleOuter) {
     auto outer = makeSquare(1.0);
     std::vector<SliceLayer::Polyline> polys = {outer};
@@ -38,10 +30,6 @@ TEST(Islands, SingleOuter) {
     ASSERT_EQ(islands.size(), 1u);
     EXPECT_EQ(islands[0].holes.size(), 0u);
 }
-
-// ------------------------------------------------------------
-// 2. Outer + inner hole
-// ------------------------------------------------------------
 
 TEST(Islands, OuterWithHole) {
     auto outer = makeSquare(2.0);
@@ -54,10 +42,6 @@ TEST(Islands, OuterWithHole) {
     ASSERT_EQ(islands.size(), 1u);
     ASSERT_EQ(islands[0].holes.size(), 1u);
 }
-
-// ------------------------------------------------------------
-// 3. Two disjoint outer loops → two islands
-// ------------------------------------------------------------
 
 TEST(Islands, TwoSeparateIslands) {
     auto A = makeSquare(1.0);
@@ -75,10 +59,6 @@ TEST(Islands, TwoSeparateIslands) {
     EXPECT_EQ(islands[1].holes.size(), 0u);
 }
 
-// ------------------------------------------------------------
-// 4. Nested holes (hole inside hole) → only inner hole counts
-// ------------------------------------------------------------
-
 TEST(Islands, NestedHoles) {
     auto outer = makeSquare(3.0);
     auto hole1 = makeReversed(makeSquare(2.0));
@@ -91,10 +71,6 @@ TEST(Islands, NestedHoles) {
     ASSERT_EQ(islands.size(), 1u);
     ASSERT_EQ(islands[0].holes.size(), 2u);
 }
-
-// ------------------------------------------------------------
-// 5. Degenerate loops → ignored
-// ------------------------------------------------------------
 
 TEST(Islands, DegenerateIgnored) {
     SliceLayer::Polyline deg;
@@ -109,10 +85,6 @@ TEST(Islands, DegenerateIgnored) {
     ASSERT_EQ(islands.size(), 1u);
     EXPECT_EQ(islands[0].holes.size(), 0u);
 }
-
-// ------------------------------------------------------------
-// 6. Mixed winding (outer CW, hole CCW) → still grouped correctly
-// ------------------------------------------------------------
 
 TEST(Islands, MixedWinding) {
     auto outer = makeReversed(makeSquare(2.0)); // CW outer

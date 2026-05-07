@@ -5,10 +5,6 @@
 #include <algorithm>
 #include <cmath>
 
-// ------------------------------------------------------------
-// Helpers
-// ------------------------------------------------------------
-
 static SliceLayer::Polyline makeSquare(double half, double z = 0.0) {
     SliceLayer::Polyline p;
     p.points = {
@@ -51,10 +47,6 @@ static bool hasCorner(const SliceLayer::Polyline &poly, const v3 &corner, double
     return false;
 }
 
-// ------------------------------------------------------------
-// 1. Expanding a CCW square — check bbox grows by offset
-// ------------------------------------------------------------
-
 TEST(Offset, ExpandSquareCCW) {
     auto out = offset::offsetPolyline(makeSquare(1.0), 0.1);
 
@@ -68,10 +60,6 @@ TEST(Offset, ExpandSquareCCW) {
     EXPECT_NEAR(minY, -1.1, 1e-4);
     EXPECT_NEAR(maxY,  1.1, 1e-4);
 }
-
-// ------------------------------------------------------------
-// 2. Expanding a CW square — same bbox as CCW
-// ------------------------------------------------------------
 
 TEST(Offset, ExpandSquareCW) {
     auto out = offset::offsetPolyline(reversed(makeSquare(1.0)), 0.1);
@@ -87,10 +75,6 @@ TEST(Offset, ExpandSquareCW) {
     EXPECT_NEAR(maxY,  1.1, 1e-4);
 }
 
-// ------------------------------------------------------------
-// 3. Shrinking a square — bbox shrinks by offset
-// ------------------------------------------------------------
-
 TEST(Offset, ShrinkSquare) {
     auto out = offset::offsetPolyline(makeSquare(1.0), -0.2);
 
@@ -104,10 +88,6 @@ TEST(Offset, ShrinkSquare) {
     EXPECT_NEAR(minY, -0.8, 1e-4);
     EXPECT_NEAR(maxY,  0.8, 1e-4);
 }
-
-// ------------------------------------------------------------
-// 4. Concave polygon (L-shape) — bbox is correct
-// ------------------------------------------------------------
 
 TEST(Offset, ConcavePolygon) {
     SliceLayer::Polyline poly;
@@ -131,19 +111,11 @@ TEST(Offset, ConcavePolygon) {
     EXPECT_NEAR(maxY,  2.1, 1e-4);
 }
 
-// ------------------------------------------------------------
-// 5. Collapse: shrinking too far → empty or degenerate, no crash
-// ------------------------------------------------------------
-
 TEST(Offset, CollapseToNothing) {
     auto out = offset::offsetPolyline(makeSquare(1.0), -2.0);
     // Clipper2 returns empty when shape collapses — just assert no crash
     SUCCEED();
 }
-
-// ------------------------------------------------------------
-// 6. Multi-polyline offset — both bboxes grow
-// ------------------------------------------------------------
 
 TEST(Offset, MultiPolyline) {
     std::vector<SliceLayer::Polyline> polys = { makeSquare(1.0), makeSquare(0.5) };
@@ -161,10 +133,6 @@ TEST(Offset, MultiPolyline) {
     EXPECT_NEAR(minX, -0.6, 1e-4);
     EXPECT_NEAR(maxX,  0.6, 1e-4);
 }
-
-// ------------------------------------------------------------
-// 7. Degenerate input → no crash, returns something
-// ------------------------------------------------------------
 
 TEST(Offset, DegenerateInput) {
     SliceLayer::Polyline p;

@@ -4,10 +4,6 @@
 #include "islands.h"
 #include "v3.h"
 
-// ------------------------------------------------------------
-// Helpers
-// ------------------------------------------------------------
-
 static SliceLayer::Polyline makeSquare(double half, double z = 0.0) {
     SliceLayer::Polyline p;
     p.points = {
@@ -36,10 +32,6 @@ static void bbox(const SliceLayer::Polyline &poly,
     }
 }
 
-// ------------------------------------------------------------
-// 1. Three shells — each shrinks by width
-// ------------------------------------------------------------
-
 TEST(Perimeters, ThreeShellsSquare) {
     auto shells = generatePerimeters(makeSquareIsland(2.0), 3, 0.5);
 
@@ -57,10 +49,6 @@ TEST(Perimeters, ThreeShellsSquare) {
     EXPECT_NEAR(minX, -0.5, 1e-4); EXPECT_NEAR(maxX, 0.5, 1e-4);
 }
 
-// ------------------------------------------------------------
-// 2. CW input — winding normalization gives same result as CCW
-// ------------------------------------------------------------
-
 TEST(Perimeters, CWInputNormalized) {
     Island isl = makeSquareIsland(2.0);
     std::reverse(isl.outer.points.begin(), isl.outer.points.end());
@@ -75,12 +63,7 @@ TEST(Perimeters, CWInputNormalized) {
     EXPECT_NEAR(maxX,  1.5, 1e-4);
 }
 
-// ------------------------------------------------------------
-// 3. Collapse: too many shells stops early
-// ------------------------------------------------------------
-
 TEST(Perimeters, CollapseStopsEarly) {
-    // 1.0 half-size square, 0.6 width → first shell at 0.4, second collapses
     auto shells = generatePerimeters(makeSquareIsland(1.0), 5, 0.6);
 
     ASSERT_EQ(shells.size(), 1u);
@@ -91,18 +74,10 @@ TEST(Perimeters, CollapseStopsEarly) {
     EXPECT_NEAR(maxX,  0.4, 1e-4);
 }
 
-// ------------------------------------------------------------
-// 4. Zero shells → empty
-// ------------------------------------------------------------
-
 TEST(Perimeters, ZeroCount) {
     auto shells = generatePerimeters(makeSquareIsland(2.0), 0, 0.5);
     EXPECT_TRUE(shells.empty());
 }
-
-// ------------------------------------------------------------
-// 5. Negative width → expands outward
-// ------------------------------------------------------------
 
 TEST(Perimeters, NegativeWidthExpands) {
     auto shells = generatePerimeters(makeSquareIsland(1.0), 1, -0.5);
@@ -115,10 +90,6 @@ TEST(Perimeters, NegativeWidthExpands) {
     EXPECT_NEAR(maxX,  1.5, 1e-4);
 }
 
-// ------------------------------------------------------------
-// 6. Z coordinate preserved
-// ------------------------------------------------------------
-
 TEST(Perimeters, ZPreserved) {
     auto shells = generatePerimeters(makeSquareIsland(2.0, 7.0), 1, 0.5);
 
@@ -127,15 +98,10 @@ TEST(Perimeters, ZPreserved) {
         EXPECT_NEAR(p.getZ(), 7.0, 1e-9);
 }
 
-// ------------------------------------------------------------
-// 7. Degenerate island → no crash, no perimeters
-// ------------------------------------------------------------
-
 TEST(Perimeters, DegenerateIsland) {
     Island isl;
     isl.outer.points = { v3(0,0,0), v3(0,0,0), v3(0,0,0) };
-    EXPECT_NO_THROW({
-        auto shells = generatePerimeters(isl, 3, 0.5);
-        EXPECT_TRUE(shells.empty());
-    });
+
+    auto shells = generatePerimeters(isl, 3, 0.5);
+    EXPECT_TRUE(shells.empty());
 }

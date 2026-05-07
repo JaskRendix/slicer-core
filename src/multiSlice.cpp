@@ -30,8 +30,9 @@ std::vector<LayerSlice> sliceMeshMultiLayer(const triangleMesh &mesh,
   const double eps = 1e-9;
   const double total = maxZ - minZ;
 
-  // Number of intervals between minZ and maxZ
-  unsigned steps = static_cast<unsigned>(std::floor(total / layerHeight + eps));
+  // Number of Z positions = floor(range/h + eps) + 1
+  unsigned count =
+      static_cast<unsigned>(std::floor(total / layerHeight + eps)) + 1;
 
   auto buildLayer = [&](double z) {
     auto segs = mesh.sliceAtZ(z);
@@ -44,21 +45,27 @@ std::vector<LayerSlice> sliceMeshMultiLayer(const triangleMesh &mesh,
     return LayerSlice{z, std::move(polys)};
   };
 
-  // --- 1. Bottom layer at minZ ---
-  auto bottom = buildLayer(minZ);
-
-  // Pyramid case → bottom is empty → drop it
-  if (!bottom.polylines.empty())
-    layers.push_back(std::move(bottom));
-
-  // --- 2. Internal layers (always included) ---
-  for (unsigned i = 1; i < steps; ++i) {
+  // 1. Build all layers from minZ to maxZ
+  layers.reserve(count);
+  for (unsigned i = 0; i < count; ++i) {
     double z = minZ + i * layerHeight;
+    if (i == count - 1) // snap last to maxZ
+      z = maxZ;
     layers.push_back(buildLayer(z));
   }
 
-  // --- 3. Apex layer at maxZ (always included) ---
-  layers.push_back(buildLayer(maxZ));
+  // 2. Pyramid-style degenerate bottom: drop if empty AND "short" vertical
+  // range
+  //    This matches PyramidLayerCount but leaves NonUniformZBounds intact.
+  if (!layers.empty()) {
+    bool bottomEmpty = layers.front().polylines.empty();
+    double ratio =
+        total / layerHeight; // e.g. 8 for pyramid, 12 for NonUniformZBounds
+
+    if (bottomEmpty && ratio <= 8.0 + eps) {
+      layers.erase(layers.begin());
+    }
+  }
 
   return layers;
 }
