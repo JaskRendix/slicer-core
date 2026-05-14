@@ -1,18 +1,13 @@
 #include "sliceLayer.h"
 #include "lineSegment.h"
 #include "v3.h"
-#include <cmath>
 #include <vector>
 
-static inline double dist2(const v3 &a, const v3 &b) {
-  double dx = a.getX() - b.getX();
-  double dy = a.getY() - b.getY();
-  double dz = a.getZ() - b.getZ();
-  return dx * dx + dy * dy + dz * dz;
-}
-
 static inline bool pointsEqual(const v3 &a, const v3 &b, double eps) {
-  return dist2(a, b) < eps * eps;
+  v3 diff = a - b;
+  double d2 = diff.getX() * diff.getX() + diff.getY() * diff.getY() +
+              diff.getZ() * diff.getZ();
+  return d2 < (eps * eps);
 }
 
 void SliceLayer::addSegment(const lineSegment &seg) {
@@ -23,7 +18,6 @@ std::vector<SliceLayer::Polyline>
 SliceLayer::buildPolylines(double epsilon) const {
   std::vector<Polyline> result;
 
-  // Copy segments so we can mark them as used
   std::vector<lineSegment> segs = segments_;
   std::vector<bool> used(segs.size(), false);
 
@@ -43,8 +37,8 @@ SliceLayer::buildPolylines(double epsilon) const {
       v3 &front = poly.points.front();
       v3 &back = poly.points.back();
 
-      // --- IMPORTANT: stop extending if loop is closed ---
-      if (pointsEqual(front, back, epsilon)) {
+      // Closed loop with at least 3 points
+      if (pointsEqual(front, back, epsilon) && poly.points.size() > 2) {
         break;
       }
 
@@ -55,7 +49,6 @@ SliceLayer::buildPolylines(double epsilon) const {
         const v3 &s = segs[j].start();
         const v3 &e = segs[j].end();
 
-        // Extend at the back
         if (pointsEqual(back, s, epsilon)) {
           poly.points.push_back(e);
           used[j] = true;
@@ -64,9 +57,7 @@ SliceLayer::buildPolylines(double epsilon) const {
           poly.points.push_back(s);
           used[j] = true;
           extended = true;
-        }
-        // Extend at the front
-        else if (pointsEqual(front, e, epsilon)) {
+        } else if (pointsEqual(front, e, epsilon)) {
           poly.points.insert(poly.points.begin(), s);
           used[j] = true;
           extended = true;
@@ -75,7 +66,14 @@ SliceLayer::buildPolylines(double epsilon) const {
           used[j] = true;
           extended = true;
         }
+
+        if (extended)
+          break;
       }
+
+      // Safety: if nothing extended, we’re done with this polyline
+      if (!extended)
+        break;
     }
 
     result.push_back(std::move(poly));

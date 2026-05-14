@@ -1,21 +1,14 @@
 #include "multiSlice.h"
+#include <algorithm>
 #include <cmath>
 #include <limits>
 
-static void computeZBounds(const triangleMesh &mesh, double &minZ,
-                           double &maxZ) {
-  minZ = std::numeric_limits<double>::infinity();
-  maxZ = -std::numeric_limits<double>::infinity();
+static inline double triMinZ(const triangle &t) {
+  return std::min({t.p0().getZ(), t.p1().getZ(), t.p2().getZ()});
+}
 
-  for (const auto &tri : mesh.getMesh()) {
-    minZ = std::min(minZ, tri.p0().getZ());
-    minZ = std::min(minZ, tri.p1().getZ());
-    minZ = std::min(minZ, tri.p2().getZ());
-
-    maxZ = std::max(maxZ, tri.p0().getZ());
-    maxZ = std::max(maxZ, tri.p1().getZ());
-    maxZ = std::max(maxZ, tri.p2().getZ());
-  }
+static inline double triMaxZ(const triangle &t) {
+  return std::max({t.p0().getZ(), t.p1().getZ(), t.p2().getZ()});
 }
 
 std::vector<LayerSlice> sliceMeshMultiLayer(const triangleMesh &mesh,
@@ -24,47 +17,65 @@ std::vector<LayerSlice> sliceMeshMultiLayer(const triangleMesh &mesh,
   if (mesh.size() == 0 || layerHeight <= 0.0)
     return layers;
 
-  double minZ, maxZ;
-  computeZBounds(mesh, minZ, maxZ);
+  // 1. Copy and sort triangles by their minimum Z
+  auto allTriangles = mesh.getMesh();
+  std::sort(allTriangles.begin(), allTriangles.end(),
+            [](const triangle &a, const triangle &b) {
+              return triMinZ(a) < triMinZ(b);
+            });
+
+  // 2. Determine global bounds
+  double minZ = triMinZ(allTriangles.front());
+  double maxZ = -std::numeric_limits<double>::infinity();
+  for (const auto &tri : allTriangles) {
+    maxZ = std::max(maxZ, triMaxZ(tri));
+  }
 
   const double eps = 1e-9;
-  const double total = maxZ - minZ;
-
-  // Number of Z positions = floor(range/h + eps) + 1
+  double total = maxZ - minZ;
   unsigned count =
       static_cast<unsigned>(std::floor(total / layerHeight + eps)) + 1;
 
-  auto buildLayer = [&](double z) {
-    auto segs = mesh.sliceAtZ(z);
-
-    SliceLayer layer(z);
-    for (auto &s : segs)
-      layer.addSegment(s);
-
-    auto polys = layer.buildPolylines();
-    return LayerSlice{z, std::move(polys)};
-  };
-
-  // 1. Build all layers from minZ to maxZ
   layers.reserve(count);
+
+  std::size_t triIdx = 0;
+  std::vector<triangle> activePool;
+  activePool.reserve(allTriangles.size());
+
   for (unsigned i = 0; i < count; ++i) {
     double z = minZ + i * layerHeight;
-    if (i == count - 1) // snap last to maxZ
+    if (i == count - 1) {
+      // Snap last layer exactly to maxZ
       z = maxZ;
-    layers.push_back(buildLayer(z));
-  }
-
-  // 2. Pyramid-style degenerate bottom: drop if empty AND "short" vertical
-  // range
-  //    This matches PyramidLayerCount but leaves NonUniformZBounds intact.
-  if (!layers.empty()) {
-    bool bottomEmpty = layers.front().polylines.empty();
-    double ratio =
-        total / layerHeight; // e.g. 8 for pyramid, 12 for NonUniformZBounds
-
-    if (bottomEmpty && ratio <= 8.0 + eps) {
-      layers.erase(layers.begin());
     }
+
+    // Add triangles whose minZ is now reached
+    while (triIdx < allTriangles.size()) {
+      double tMin = triMinZ(allTriangles[triIdx]);
+      if (tMin > z)
+        break;
+      activePool.push_back(allTriangles[triIdx]);
+      ++triIdx;
+    }
+
+    // Remove triangles that are completely below the plane
+    activePool.erase(
+        std::remove_if(activePool.begin(), activePool.end(),
+                       [z](const triangle &t) { return triMaxZ(t) < z; }),
+        activePool.end());
+
+    // Slice only active triangles
+    SliceLayer layer(z);
+    Plane slicePlane(v3(0, 0, 1), z);
+    for (const auto &tri : activePool) {
+      lineSegment seg;
+      if (tri.intersectPlane(slicePlane, seg) == 0) {
+        layer.addSegment(seg);
+      }
+    }
+
+    // Build polylines with a stitching epsilon
+    layers.push_back(LayerSlice{z, layer.buildPolylines(1e-4)});
   }
 
   return layers;
