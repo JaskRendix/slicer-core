@@ -144,3 +144,29 @@ TEST(SliceLayer, MixedOpenClosed) {
     EXPECT_TRUE(foundClosed);
     EXPECT_TRUE(foundOpen);
 }
+
+TEST(SliceLayer, LoopClosureWithEpsilon) {
+    SliceLayer layer(0.0);
+
+    layer.addSegment(seg(0,0, 1,0));
+    layer.addSegment(seg(1,0, 1,1));
+    layer.addSegment(seg(1,1, 0,1));
+    layer.addSegment(seg(0,1, 0,0 + 1e-7)); // slightly off
+
+    auto polys = layer.buildPolylines(1e-6);
+
+    ASSERT_EQ(polys.size(), 1u);
+    ASSERT_EQ(polys[0].points.size(), 5u);
+}
+
+TEST(SliceLayer, NoInfiniteExtensionOnBadInput) {
+    SliceLayer layer(0.0);
+
+    // Two segments that cannot connect
+    layer.addSegment(seg(0,0, 1,0));
+    layer.addSegment(seg(5,5, 6,5));
+
+    auto polys = layer.buildPolylines();
+
+    ASSERT_EQ(polys.size(), 2u);
+}

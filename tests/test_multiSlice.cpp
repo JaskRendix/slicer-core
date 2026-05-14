@@ -93,3 +93,60 @@ TEST(MultiSlice, EpsilonLastLayerIncluded) {
 
     EXPECT_TRUE(hasTop);
 }
+
+TEST(MultiSlice, ActivePoolRemovesPassedTriangles) {
+    triangleMesh mesh;
+
+    mesh.push_back(triangle(
+        v3(0,0,0), v3(1,0,0), v3(0,1,0), v3(0,0,0)
+    ));
+    mesh.push_back(triangle(
+        v3(0,0,10), v3(1,0,10), v3(0,1,10), v3(0,0,10)
+    ));
+
+    auto layers = sliceMeshMultiLayer(mesh, 1.0);
+
+    // bottom triangle should only appear in z=0 layer
+    // top triangle only in z=10 layer
+    bool seenBottom = false, seenTop = false;
+
+    for (auto &l : layers) {
+        if (std::abs(l.z - 0.0) < 1e-9)
+            seenBottom = true;
+        if (std::abs(l.z - 10.0) < 1e-9)
+            seenTop = true;
+    }
+
+    EXPECT_TRUE(seenBottom);
+    EXPECT_TRUE(seenTop);
+}
+
+TEST(MultiSlice, ExactMaxZSliceIncluded) {
+    triangleMesh mesh;
+
+    mesh.push_back(triangle(
+        v3(0,0,1), v3(1,0,1), v3(0,1,1), v3(0,0,1)
+    ));
+
+    auto layers = sliceMeshMultiLayer(mesh, 0.3);
+
+    bool found = false;
+    for (auto &l : layers)
+        if (std::abs(l.z - 1.0) < 1e-9)
+            found = true;
+
+    EXPECT_TRUE(found);
+}
+
+TEST(MultiSlice, TallMeshManyLayers) {
+    triangleMesh mesh;
+
+    // vertical strip from z=0 to z=100
+    mesh.push_back(triangle(
+        v3(0,0,0), v3(1,0,100), v3(0,1,100), v3(0,0,0)
+    ));
+
+    auto layers = sliceMeshMultiLayer(mesh, 1.0);
+
+    EXPECT_EQ(layers.size(), 101u);
+}

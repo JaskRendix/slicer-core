@@ -59,3 +59,46 @@ TEST(Triangle, Degenerate) {
     lineSegment seg;
     EXPECT_EQ(t.intersectPlane(pl, seg), 1);
 }
+
+TEST(Triangle, VertexOnPlaneProducesSegment) {
+    triangle t(
+        v3(0,0,0),   // on plane
+        v3(1,0,1),   // above
+        v3(0,1,-1),  // below
+        v3(0,0,0)
+    );
+
+    Plane pl(v3(0,0,1), 0.0);
+    lineSegment seg;
+    EXPECT_EQ(t.intersectPlane(pl, seg), 0);
+}
+
+TEST(Triangle, TwoVerticesOnPlaneProducesSegment) {
+    triangle t(
+        v3(0,0,0),   // on plane
+        v3(1,0,0),   // on plane
+        v3(0,1,1),   // above plane
+        v3(0,0,0)
+    );
+
+    Plane pl(v3(0,0,1), 0.0);
+    lineSegment seg;
+
+    EXPECT_EQ(t.intersectPlane(pl, seg), 0);
+
+    EXPECT_NEAR(seg.start().getZ(), 0.0, 1e-9);
+    EXPECT_NEAR(seg.end().getZ(),   0.0, 1e-9);
+}
+
+TEST(Triangle, DuplicateIntersectionsCollapsed) {
+    triangle t(
+        v3(0,0,0),   // on plane
+        v3(1,0,-1),  // below
+        v3(0,1,-1),  // below
+        v3(0,0,0)
+    );
+
+    Plane pl(v3(0,0,1), 0.0);
+    lineSegment seg;
+    EXPECT_EQ(t.intersectPlane(pl, seg), 1); // only one unique point
+}
