@@ -96,8 +96,15 @@ tests/
 ## Core Concepts
 
 ### Triangle–Plane Intersection
-Each triangle is intersected with a horizontal plane.  
-Edges that cross the plane yield intersection points through linear interpolation.
+Each triangle is intersected with a horizontal plane using robust classification:
+
+- Vertices above, below, or **exactly on** the plane are detected  
+- Edges that cross the plane produce intersection points through linear interpolation  
+- Edges with **both endpoints on the plane** produce a coplanar segment  
+- Duplicate intersection points are collapsed  
+- Fully coplanar triangles are ignored  
+
+This ensures stable slicing when vertices lie exactly on layer boundaries.
 
 ### Layer Slicing
 All triangles are processed at each Z height.  
@@ -130,6 +137,9 @@ Supported patterns: line, grid, hex.
 - Donut shapes  
 - Degenerate triangles  
 - Randomized meshes  
+- On‑plane vertex handling
+- Coplanar edge detection
+- Duplicate intersection collapse
 
 Run:
 
