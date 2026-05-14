@@ -139,3 +139,98 @@ TEST(Offset, DegenerateInput) {
     p.points = { v3(0,0,0), v3(0,0,0), v3(0,0,0) };
     EXPECT_NO_THROW(offset::offsetPolyline(p, 0.1));
 }
+
+TEST(Offset, RotatedSquare) {
+    SliceLayer::Polyline poly;
+    double z = 0.0;
+
+    poly.points = {
+        v3( 1, 0, z),
+        v3( 0, 1, z),
+        v3(-1, 0, z),
+        v3( 0,-1, z),
+        v3( 1, 0, z)
+    };
+
+    auto out = offset::offsetPolyline(poly, 0.2);
+
+    double minX, maxX, minY, maxY;
+    bbox(out, minX, maxX, minY, maxY);
+
+    double expected = 1.0 + 0.2 * std::sqrt(2.0);
+
+    EXPECT_NEAR(maxX,  expected, 3e-3);
+    EXPECT_NEAR(minX, -expected, 3e-3);
+    EXPECT_NEAR(maxY,  expected, 3e-3);
+    EXPECT_NEAR(minY, -expected, 3e-3);
+}
+
+TEST(Offset, PolygonWithHole) {
+    SliceLayer::Polyline outer = makeSquare(2.0);
+    SliceLayer::Polyline inner = makeSquare(1.0);
+
+    std::vector<SliceLayer::Polyline> polys = { outer, inner };
+    auto out = offset::offsetLayerPolylines(polys, 0.2);
+
+    ASSERT_EQ(out.size(), 2u);
+
+    double minX, maxX, minY, maxY;
+
+    // Outer grows
+    bbox(out[0], minX, maxX, minY, maxY);
+    EXPECT_NEAR(minX, -2.2, 1e-3);
+    EXPECT_NEAR(maxX,  2.2, 1e-3);
+
+    // Inner also grows (holes not supported yet)
+    bbox(out[1], minX, maxX, minY, maxY);
+    EXPECT_NEAR(minX, -1.2, 1e-3);
+    EXPECT_NEAR(maxX,  1.2, 1e-3);
+}
+
+TEST(Offset, TinyPolygonCollapse) {
+    SliceLayer::Polyline poly = makeSquare(0.01);
+    auto out = offset::offsetPolyline(poly, -0.02);
+
+    // Should collapse to empty
+    EXPECT_TRUE(out.points.empty());
+}
+
+TEST(Offset, ZCoordinatePreserved) {
+    auto poly = makeSquare(1.0, 5.0); // z = 5
+    auto out = offset::offsetPolyline(poly, 0.1);
+
+    for (auto &p : out.points)
+        EXPECT_NEAR(p.getZ(), 5.0, 1e-9);
+}
+
+TEST(Offset, SelfIntersectingPolygon) {
+    SliceLayer::Polyline poly;
+    poly.points = {
+        v3(0,0,0),
+        v3(2,2,0),
+        v3(0,2,0),
+        v3(2,0,0),
+        v3(0,0,0)
+    };
+
+    EXPECT_NO_THROW(offset::offsetPolyline(poly, 0.1));
+}
+
+TEST(Offset, LargeCoordinates) {
+    SliceLayer::Polyline poly;
+    poly.points = {
+        v3(1e6, 1e6, 0),
+        v3(1e6+1000, 1e6, 0),
+        v3(1e6+1000, 1e6+1000, 0),
+        v3(1e6, 1e6+1000, 0),
+        v3(1e6, 1e6, 0)
+    };
+
+    auto out = offset::offsetPolyline(poly, 100);
+
+    double minX, maxX, minY, maxY;
+    bbox(out, minX, maxX, minY, maxY);
+
+    EXPECT_NEAR(minX, 1e6 - 100, 1e-3);
+    EXPECT_NEAR(maxX, 1e6 + 1000 + 100, 1e-3);
+}

@@ -150,3 +150,39 @@ TEST(MultiSlice, TallMeshManyLayers) {
 
     EXPECT_EQ(layers.size(), 101u);
 }
+
+TEST(MultiSlice, PyramidApexLayerIsDegenerate) {
+    auto mesh = makePyramid();
+    auto layers = sliceMeshMultiLayer(mesh, 0.25);
+
+    const auto &top = layers.back();
+    ASSERT_NEAR(top.z, 1.0, 1e-9);
+
+    // All polylines should be degenerate
+    for (auto &p : top.polylines) {
+        EXPECT_LE(p.points.size(), 3u);
+    }
+}
+
+TEST(MultiSlice, PyramidLayersShrinkMonotonically) {
+    auto mesh = makePyramid();
+    auto layers = sliceMeshMultiLayer(mesh, 0.25);
+
+    double prevSize = 1e9;
+
+    for (auto &layer : layers) {
+        if (layer.polylines.empty()) continue;
+
+        const auto &poly = layer.polylines[0];
+
+        double minX = 1e9, maxX = -1e9;
+        for (auto &p : poly.points) {
+            minX = std::min(minX, p.getX());
+            maxX = std::max(maxX, p.getX());
+        }
+
+        double size = maxX - minX;
+        EXPECT_LE(size, prevSize + 1e-9);
+        prevSize = size;
+    }
+}
