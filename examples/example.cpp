@@ -7,6 +7,9 @@
 #include "multiSlice.h"
 #include "winding.h"
 
+// NEW:
+#include "debug_export.h"
+
 // Proper degeneracy check: area == 0 or too few points
 static bool isDegenerate(const SliceLayer::Polyline &poly) {
     if (poly.points.size() < 4)  // 3 + repeated first
@@ -38,6 +41,7 @@ int main() {
 
     std::cout << "Layers: " << layers.size() << "\n";
 
+    size_t layerIndex = 0;
     for (const auto &layer : layers) {
         std::cout << "\n=== Layer Z = " << layer.z << " ===\n";
 
@@ -48,6 +52,7 @@ int main() {
 
         if (allDegenerate) {
             std::cout << "(degenerate apex layer, skipping)\n";
+            ++layerIndex;
             continue;
         }
 
@@ -78,6 +83,46 @@ int main() {
                           << ", " << p.getZ() << ")\n";
             }
         }
+
+        //
+        // === NEW: DEBUG VISUALIZATION EXPORT ===
+        //
+        std::vector<mesh_slicing::debug::TaggedPolyline> dbg;
+
+        // Original layer polylines
+        {
+            std::vector<std::vector<v3>> loops;
+            loops.reserve(layer.polylines.size());
+            for (const auto &pl : layer.polylines)
+                loops.push_back(pl.points);
+
+            auto tagged = mesh_slicing::debug::from_v3_polylines(loops, "original");
+            dbg.insert(dbg.end(), tagged.begin(), tagged.end());
+        }
+
+        // Offset polylines
+        {
+            std::vector<std::vector<v3>> loops;
+            loops.reserve(offsetPolys.size());
+            for (const auto &pl : offsetPolys)
+                loops.push_back(pl.points);
+
+            auto tagged = mesh_slicing::debug::from_v3_polylines(loops, "offset");
+            dbg.insert(dbg.end(), tagged.begin(), tagged.end());
+        }
+
+        // Export SVG + JSON for this layer
+        {
+            std::string svgName  = "layer_" + std::to_string(layerIndex) + ".svg";
+            std::string jsonName = "layer_" + std::to_string(layerIndex) + ".json";
+
+            mesh_slicing::debug::export_svg(svgName, dbg);
+            mesh_slicing::debug::export_json(jsonName, dbg);
+
+            std::cout << "Exported debug: " << svgName << " and " << jsonName << "\n";
+        }
+
+        ++layerIndex;
     }
 
     return 0;

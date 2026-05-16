@@ -11,6 +11,7 @@ FetchContent_MakeAvailable(googletest)
 
 # Collect all test files
 file(GLOB TEST_SOURCES
+    test_debug_export.cpp
     test_helpers.h
     test_infill.cpp
     test_islands.cpp

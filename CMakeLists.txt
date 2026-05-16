@@ -25,6 +25,7 @@ add_library(mesh_slicing
     src/infill.cpp
     src/winding_normalize.cpp
     src/perimeters.cpp
+    src/debug_export.cpp
 )
 
 target_link_libraries(mesh_slicing Clipper2)
