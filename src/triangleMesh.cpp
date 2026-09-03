@@ -128,8 +128,8 @@ void triangleMesh::loadBinarySTL(const std::filesystem::path &path) {
 }
 
 //
-// sliceAtZ — robust multi-threaded slicer with adaptive epsilon and
-// deduplication
+// sliceAtZ — robust multi-threaded slicer with adaptive epsilon, safe chunking,
+// and deduplication
 //
 std::vector<lineSegment> triangleMesh::sliceAtZ(double z) const {
   v3 aabb = meshAABBSize();
@@ -142,7 +142,7 @@ std::vector<lineSegment> triangleMesh::sliceAtZ(double z) const {
 
   unsigned int hardware_threads = std::thread::hardware_concurrency();
   std::size_t num_threads =
-      std::max(1U, hardware_threads ? hardware_threads : 4U);
+      std::max(1U, hardware_threads == 0 ? 4U : hardware_threads);
 
   if (num_triangles < 1000)
     num_threads = 1;
@@ -151,12 +151,13 @@ std::vector<lineSegment> triangleMesh::sliceAtZ(double z) const {
   std::vector<std::thread> threads;
   threads.reserve(num_threads);
 
-  std::size_t chunk_size = num_triangles / num_threads;
+  std::size_t chunk_size = (num_triangles + num_threads - 1) / num_threads;
 
   for (std::size_t i = 0; i < num_threads; ++i) {
     std::size_t start = i * chunk_size;
-    std::size_t end =
-        (i == num_threads - 1) ? num_triangles : start + chunk_size;
+    if (start >= num_triangles)
+      break;
+    std::size_t end = std::min(num_triangles, start + chunk_size);
 
     threads.emplace_back(
         [this, start, end, z, eps, &res = thread_results[i]]() {

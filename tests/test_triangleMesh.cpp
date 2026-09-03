@@ -293,3 +293,132 @@ TEST(TriangleMesh, LoadBinaryMultipleTriangles) {
 
     std::remove(path);
 }
+
+TEST(TriangleMesh, DeduplicationWithinTriangleOnly) {
+    triangleMesh mesh;
+
+    // Two triangles sharing the same edge crossing z=0
+    mesh.push_back(triangle(
+        v3(0,0,-1),
+        v3(1,0,1),
+        v3(0,1,1),
+        v3(0,0,-1)
+    ));
+    mesh.push_back(triangle(
+        v3(0,0,-1),
+        v3(1,0,1),
+        v3(0,-1,1),
+        v3(0,0,-1)
+    ));
+
+    auto segs = mesh.sliceAtZ(0.0);
+
+    // Should produce 2 segments (deduplication is per triangle)
+    EXPECT_EQ(segs.size(), 2u);
+}
+
+TEST(TriangleMesh, CoplanarEdgeSuppressed) {
+    triangleMesh mesh;
+
+    // Edge p0–p1 lies exactly on z=0 → should be suppressed
+    mesh.push_back(triangle(
+        v3(0,0,0),
+        v3(1,0,0),
+        v3(0,1,1),
+        v3(0,0,0)
+    ));
+
+    auto segs = mesh.sliceAtZ(0.0);
+    EXPECT_TRUE(segs.empty());
+}
+
+TEST(TriangleMesh, DuplicateIntersectionPointsCollapsed) {
+    triangleMesh mesh;
+
+    // Two edges intersect at the same point
+    mesh.push_back(triangle(
+        v3(0,0,-1),
+        v3(0,0,1),
+        v3(0,0,1),   // duplicate vertex
+        v3(0,0,-1)
+    ));
+
+    auto segs = mesh.sliceAtZ(0.0);
+
+    // Should NOT produce a segment because only 1 unique intersection point
+    EXPECT_TRUE(segs.empty());
+}
+
+TEST(TriangleMesh, ThreeIntersectionPointsIgnored) {
+    triangleMesh mesh;
+
+    // This triangle has one vertex on the plane and two edges crossing.
+    // It produces 3 raw intersection points, but only 2 UNIQUE points.
+    // Therefore the slicer must produce exactly 1 segment.
+
+    mesh.push_back(triangle(
+        v3(0,0,0),   // on plane
+        v3(1,0,1),   // above
+        v3(0,1,-1),  // below
+        v3(0,0,0)
+    ));
+
+    auto segs = mesh.sliceAtZ(0.0);
+
+    EXPECT_EQ(segs.size(), 1u);
+}
+
+TEST(TriangleMesh, AdaptiveEpsilonTinyMesh) {
+    triangleMesh mesh;
+
+    mesh.push_back(triangle(
+        v3(0,0,-1e-14),
+        v3(1e-14,0,1e-14),
+        v3(0,1e-14,1e-14),
+        v3(0,0,-1e-14)
+    ));
+
+    auto segs = mesh.sliceAtZ(0.0);
+    EXPECT_EQ(segs.size(), 1u);
+}
+
+TEST(TriangleMesh, AdaptiveEpsilonHugeMesh) {
+    triangleMesh mesh;
+
+    mesh.push_back(triangle(
+        v3(0,0,-1e9),
+        v3(1e9,0,1e9),
+        v3(0,1e9,1e9),
+        v3(0,0,-1e9)
+    ));
+
+    auto segs = mesh.sliceAtZ(0.0);
+    EXPECT_EQ(segs.size(), 1u);
+}
+
+TEST(TriangleMesh, MultiThreadCorrectness) {
+    triangleMesh mesh;
+
+    for (int i = 0; i < 10000; ++i) {
+        mesh.push_back(triangle(
+            v3(0,0,-1),
+            v3(1,0,1),
+            v3(0,1,1),
+            v3(0,0,-1)
+        ));
+    }
+
+    auto segs = mesh.sliceAtZ(0.0);
+    EXPECT_EQ(segs.size(), 10000u);
+}
+
+TEST(TriangleMesh, ChunkingCorrectnessSmallMesh) {
+    triangleMesh mesh;
+
+    // Very small mesh, but many hardware threads
+    mesh.push_back(makeTri(-1,1,1));
+    mesh.push_back(makeTri(-1,1,1));
+
+    auto segs = mesh.sliceAtZ(0.0);
+    EXPECT_EQ(segs.size(), 2u);
+}
