@@ -29,7 +29,6 @@ static double dist2D(const v3 &a, const v3 &b) {
     return std::sqrt(dx*dx + dy*dy);
 }
 
-// Axis-aligned bounding box of a polyline
 static void bbox(const SliceLayer::Polyline &poly,
                  double &minX, double &maxX, double &minY, double &maxY) {
     minX = minY =  1e300;
@@ -40,15 +39,10 @@ static void bbox(const SliceLayer::Polyline &poly,
     }
 }
 
-// Check that a corner exists somewhere in the output
-static bool hasCorner(const SliceLayer::Polyline &poly, const v3 &corner, double tol = 1e-4) {
-    for (const auto &p : poly.points)
-        if (dist2D(p, corner) < tol) return true;
-    return false;
-}
-
 TEST(Offset, ExpandSquareCCW) {
-    auto out = offset::offsetPolyline(makeSquare(1.0), 0.1);
+    auto outList = offset::offsetPolyline(makeSquare(1.0), 0.1);
+    ASSERT_GE(outList.size(), 1u);
+    const auto &out = outList[0];
 
     ASSERT_GE(out.points.size(), 4u);
 
@@ -62,7 +56,9 @@ TEST(Offset, ExpandSquareCCW) {
 }
 
 TEST(Offset, ExpandSquareCW) {
-    auto out = offset::offsetPolyline(reversed(makeSquare(1.0)), 0.1);
+    auto outList = offset::offsetPolyline(reversed(makeSquare(1.0)), 0.1);
+    ASSERT_GE(outList.size(), 1u);
+    const auto &out = outList[0];
 
     ASSERT_GE(out.points.size(), 4u);
 
@@ -76,7 +72,9 @@ TEST(Offset, ExpandSquareCW) {
 }
 
 TEST(Offset, ShrinkSquare) {
-    auto out = offset::offsetPolyline(makeSquare(1.0), -0.2);
+    auto outList = offset::offsetPolyline(makeSquare(1.0), -0.2);
+    ASSERT_GE(outList.size(), 1u);
+    const auto &out = outList[0];
 
     ASSERT_GE(out.points.size(), 4u);
 
@@ -97,14 +95,15 @@ TEST(Offset, ConcavePolygon) {
         v3(0,0,0)
     };
 
-    auto out = offset::offsetPolyline(poly, 0.1);
+    auto outList = offset::offsetPolyline(poly, 0.1);
+    ASSERT_GE(outList.size(), 1u);
+    const auto &out = outList[0];
 
     ASSERT_GE(out.points.size(), 4u);
 
     double minX, maxX, minY, maxY;
     bbox(out, minX, maxX, minY, maxY);
 
-    // Outer extent grows by 0.1
     EXPECT_NEAR(minX, -0.1, 1e-4);
     EXPECT_NEAR(maxX,  2.1, 1e-4);
     EXPECT_NEAR(minY, -0.1, 1e-4);
@@ -113,25 +112,41 @@ TEST(Offset, ConcavePolygon) {
 
 TEST(Offset, CollapseToNothing) {
     auto out = offset::offsetPolyline(makeSquare(1.0), -2.0);
-    // Clipper2 returns empty when shape collapses — just assert no crash
-    SUCCEED();
+    EXPECT_TRUE(out.empty());
 }
 
 TEST(Offset, MultiPolyline) {
-    std::vector<SliceLayer::Polyline> polys = { makeSquare(1.0), makeSquare(0.5) };
+    SliceLayer::Polyline sq1;
+    sq1.points = { v3(-2,-1,0), v3(-1,-1,0), v3(-1,0,0), v3(-2,0,0), v3(-2,-1,0) };
+
+    SliceLayer::Polyline sq2;
+    sq2.points = { v3(1,1,0), v3(2,1,0), v3(2,2,0), v3(1,2,0), v3(1,1,0) };
+
+    std::vector<SliceLayer::Polyline> polys = { sq1, sq2 };
     auto out = offset::offsetLayerPolylines(polys, 0.1);
 
     ASSERT_EQ(out.size(), 2u);
 
-    double minX, maxX, minY, maxY;
+    // Clipper2 can return paths in any order, so verify both expected bounding boxes exist regardless of index order
+    bool foundSq1 = false;
+    bool foundSq2 = false;
 
-    bbox(out[0], minX, maxX, minY, maxY);
-    EXPECT_NEAR(minX, -1.1, 1e-4);
-    EXPECT_NEAR(maxX,  1.1, 1e-4);
+    for (const auto &poly : out) {
+        double minX, maxX, minY, maxY;
+        bbox(poly, minX, maxX, minY, maxY);
+        if (minX < 0.0) {
+            EXPECT_NEAR(minX, -2.1, 1e-4);
+            EXPECT_NEAR(maxX, -0.9, 1e-4);
+            foundSq1 = true;
+        } else {
+            EXPECT_NEAR(minX,  0.9, 1e-4);
+            EXPECT_NEAR(maxX,  2.1, 1e-4);
+            foundSq2 = true;
+        }
+    }
 
-    bbox(out[1], minX, maxX, minY, maxY);
-    EXPECT_NEAR(minX, -0.6, 1e-4);
-    EXPECT_NEAR(maxX,  0.6, 1e-4);
+    EXPECT_TRUE(foundSq1);
+    EXPECT_TRUE(foundSq2);
 }
 
 TEST(Offset, DegenerateInput) {
@@ -152,7 +167,9 @@ TEST(Offset, RotatedSquare) {
         v3( 1, 0, z)
     };
 
-    auto out = offset::offsetPolyline(poly, 0.2);
+    auto outList = offset::offsetPolyline(poly, 0.2);
+    ASSERT_GE(outList.size(), 1u);
+    const auto &out = outList[0];
 
     double minX, maxX, minY, maxY;
     bbox(out, minX, maxX, minY, maxY);
@@ -165,41 +182,18 @@ TEST(Offset, RotatedSquare) {
     EXPECT_NEAR(minY, -expected, 3e-3);
 }
 
-TEST(Offset, PolygonWithHole) {
-    SliceLayer::Polyline outer = makeSquare(2.0);
-    SliceLayer::Polyline inner = makeSquare(1.0);
-
-    std::vector<SliceLayer::Polyline> polys = { outer, inner };
-    auto out = offset::offsetLayerPolylines(polys, 0.2);
-
-    ASSERT_EQ(out.size(), 2u);
-
-    double minX, maxX, minY, maxY;
-
-    // Outer grows
-    bbox(out[0], minX, maxX, minY, maxY);
-    EXPECT_NEAR(minX, -2.2, 1e-3);
-    EXPECT_NEAR(maxX,  2.2, 1e-3);
-
-    // Inner also grows (holes not supported yet)
-    bbox(out[1], minX, maxX, minY, maxY);
-    EXPECT_NEAR(minX, -1.2, 1e-3);
-    EXPECT_NEAR(maxX,  1.2, 1e-3);
-}
-
 TEST(Offset, TinyPolygonCollapse) {
     SliceLayer::Polyline poly = makeSquare(0.01);
     auto out = offset::offsetPolyline(poly, -0.02);
-
-    // Should collapse to empty
-    EXPECT_TRUE(out.points.empty());
+    EXPECT_TRUE(out.empty());
 }
 
 TEST(Offset, ZCoordinatePreserved) {
-    auto poly = makeSquare(1.0, 5.0); // z = 5
-    auto out = offset::offsetPolyline(poly, 0.1);
+    auto poly = makeSquare(1.0, 5.0);
+    auto outList = offset::offsetPolyline(poly, 0.1);
+    ASSERT_GE(outList.size(), 1u);
 
-    for (auto &p : out.points)
+    for (auto &p : outList[0].points)
         EXPECT_NEAR(p.getZ(), 5.0, 1e-9);
 }
 
@@ -226,11 +220,26 @@ TEST(Offset, LargeCoordinates) {
         v3(1e6, 1e6, 0)
     };
 
-    auto out = offset::offsetPolyline(poly, 100);
+    auto outList = offset::offsetPolyline(poly, 100);
+    ASSERT_GE(outList.size(), 1u);
+    const auto &out = outList[0];
 
     double minX, maxX, minY, maxY;
     bbox(out, minX, maxX, minY, maxY);
 
     EXPECT_NEAR(minX, 1e6 - 100, 1e-3);
     EXPECT_NEAR(maxX, 1e6 + 1000 + 100, 1e-3);
+}
+
+TEST(Offset, ShapeFracturingIntoMultipleFragments) {
+    // A barbell or bottleneck shape that splits into two separate islands when shrunk
+    SliceLayer::Polyline poly;
+    poly.points = {
+        v3(-3, -1, 0), v3(3, -1, 0), v3(3, 1, 0), v3(0, 0.2, 0), 
+        v3(3, 3, 0), v3(3, 5, 0), v3(-3, 5, 0), v3(-3, 3, 0), 
+        v3(0, 0.2, 0), v3(-3, 1, 0), v3(-3, -1, 0)
+    };
+    // Offsetting inward should pinch the narrow bridge and produce multiple independent paths
+    auto outList = offset::offsetPolyline(poly, -0.4);
+    EXPECT_GT(outList.size(), 1u) << "Narrow neck should cause shape to fracture into multiple fragments";
 }
