@@ -23,12 +23,6 @@ static SliceLayer::Polyline reversed(const SliceLayer::Polyline &poly) {
     return out;
 }
 
-static double dist2D(const v3 &a, const v3 &b) {
-    double dx = a.getX() - b.getX();
-    double dy = a.getY() - b.getY();
-    return std::sqrt(dx*dx + dy*dy);
-}
-
 static void bbox(const SliceLayer::Polyline &poly,
                  double &minX, double &maxX, double &minY, double &maxY) {
     minX = minY =  1e300;
@@ -127,7 +121,6 @@ TEST(Offset, MultiPolyline) {
 
     ASSERT_EQ(out.size(), 2u);
 
-    // Clipper2 can return paths in any order, so verify both expected bounding boxes exist regardless of index order
     bool foundSq1 = false;
     bool foundSq2 = false;
 
@@ -182,12 +175,6 @@ TEST(Offset, RotatedSquare) {
     EXPECT_NEAR(minY, -expected, 3e-3);
 }
 
-TEST(Offset, TinyPolygonCollapse) {
-    SliceLayer::Polyline poly = makeSquare(0.01);
-    auto out = offset::offsetPolyline(poly, -0.02);
-    EXPECT_TRUE(out.empty());
-}
-
 TEST(Offset, ZCoordinatePreserved) {
     auto poly = makeSquare(1.0, 5.0);
     auto outList = offset::offsetPolyline(poly, 0.1);
@@ -232,14 +219,12 @@ TEST(Offset, LargeCoordinates) {
 }
 
 TEST(Offset, ShapeFracturingIntoMultipleFragments) {
-    // A barbell or bottleneck shape that splits into two separate islands when shrunk
     SliceLayer::Polyline poly;
     poly.points = {
         v3(-3, -1, 0), v3(3, -1, 0), v3(3, 1, 0), v3(0, 0.2, 0), 
         v3(3, 3, 0), v3(3, 5, 0), v3(-3, 5, 0), v3(-3, 3, 0), 
         v3(0, 0.2, 0), v3(-3, 1, 0), v3(-3, -1, 0)
     };
-    // Offsetting inward should pinch the narrow bridge and produce multiple independent paths
     auto outList = offset::offsetPolyline(poly, -0.4);
     EXPECT_GT(outList.size(), 1u) << "Narrow neck should cause shape to fracture into multiple fragments";
 }

@@ -1,6 +1,6 @@
 BUILD_DIR := build
 
-all: configure build-all
+all: clean configure build-all
 
 configure:
 	mkdir -p $(BUILD_DIR)
