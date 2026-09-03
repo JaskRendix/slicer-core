@@ -8,7 +8,7 @@
 triangleMesh::triangleMesh() noexcept
     : bottomLeftVertex_(1e9, 1e9, 1e9), topRightVertex_(-1e9, -1e9, -1e9) {}
 
-triangleMesh::triangleMesh(const std::string &stlFile, bool isBinary)
+triangleMesh::triangleMesh(const std::filesystem::path &stlFile, bool isBinary)
     : bottomLeftVertex_(1e9, 1e9, 1e9), topRightVertex_(-1e9, -1e9, -1e9) {
   if (isBinary)
     loadBinarySTL(stlFile);
@@ -54,7 +54,7 @@ void triangleMesh::normalize() noexcept {
 //
 // ASCII STL loader
 //
-void triangleMesh::loadAsciiSTL(const std::string &path) {
+void triangleMesh::loadAsciiSTL(const std::filesystem::path &path) {
   std::ifstream in(path);
   if (!in) {
     std::cerr << "Invalid STL file: " << path << "\n";
@@ -85,9 +85,9 @@ void triangleMesh::loadAsciiSTL(const std::string &path) {
 }
 
 //
-// Binary STL loader
+// Binary STL loader with pre-allocation
 //
-void triangleMesh::loadBinarySTL(const std::string &path) {
+void triangleMesh::loadBinarySTL(const std::filesystem::path &path) {
   std::ifstream in(path, std::ios::binary);
   if (!in) {
     std::cerr << "Invalid STL file: " << path << "\n";
@@ -99,6 +99,8 @@ void triangleMesh::loadBinarySTL(const std::string &path) {
 
   uint32_t nFaces = 0;
   in.read(reinterpret_cast<char *>(&nFaces), sizeof(uint32_t));
+
+  mesh_.reserve(nFaces);
 
   for (uint32_t i = 0; i < nFaces; ++i) {
     float v[12];
@@ -113,7 +115,7 @@ void triangleMesh::loadBinarySTL(const std::string &path) {
 }
 
 //
-// sliceAtZ — watertight slicer implementation without std::optional
+// sliceAtZ — watertight slicer implementation
 //
 std::vector<lineSegment> triangleMesh::sliceAtZ(double z) const {
   const double eps = 1e-9;

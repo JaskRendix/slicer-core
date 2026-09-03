@@ -5,13 +5,13 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
-#include <string>
+#include <filesystem>
 #include <vector>
 
 class triangleMesh {
 public:
   triangleMesh() noexcept;
-  explicit triangleMesh(const std::string &stlFile, bool isBinary);
+  explicit triangleMesh(const std::filesystem::path &stlFile, bool isBinary);
 
   ~triangleMesh() = default;
 
@@ -36,8 +36,8 @@ public:
   [[nodiscard]] std::vector<lineSegment> sliceAtZ(double z) const;
 
 private:
-  void loadAsciiSTL(const std::string &path);
-  void loadBinarySTL(const std::string &path);
+  void loadAsciiSTL(const std::filesystem::path &path);
+  void loadBinarySTL(const std::filesystem::path &path);
 
 private:
   v3 bottomLeftVertex_;

@@ -34,18 +34,22 @@ generatePerimeters(const Island &island, int count, double width) {
     if (!currentOuter.empty()) {
       auto outerShells = offset::offsetLayerPolylines(currentOuter, -width);
       if (!outerShells.empty()) {
-        layerShells.insert(layerShells.end(), outerShells.begin(), outerShells.end());
+        layerShells.insert(layerShells.end(), outerShells.begin(),
+                           outerShells.end());
         currentOuter = std::move(outerShells);
       } else {
         currentOuter.clear();
       }
     }
 
-    // Offset hole perimeters outward/inward depending on inner cavity rules (+width or -width)
+    // Offset hole perimeters outward/inward depending on inner cavity rules
+    // (+width or -width)
     if (!currentHoles.empty()) {
-      auto holeShells = offset::offsetLayerPolylines(currentHoles, width); // positive to shrink hole cavity inward
+      auto holeShells = offset::offsetLayerPolylines(
+          currentHoles, width); // positive to shrink hole cavity inward
       if (!holeShells.empty()) {
-        layerShells.insert(layerShells.end(), holeShells.begin(), holeShells.end());
+        layerShells.insert(layerShells.end(), holeShells.begin(),
+                           holeShells.end());
         currentHoles = std::move(holeShells);
       } else {
         currentHoles.clear();
