@@ -337,3 +337,39 @@ TEST(Perimeters, RotatedConcaveShape) {
     EXPECT_GT(minY, 0.0);
     EXPECT_LT(maxY, 2.0);
 }
+
+TEST(Perimeters, IntegratedOuterAndHoleShells) {
+    Island isl;
+    isl.outer = makeSquare(4.0); // Outer 8x8 box
+
+    // Inner 2x2 hole (CW)
+    SliceLayer::Polyline hole = makeSquare(1.0);
+    std::reverse(hole.points.begin(), hole.points.end());
+    isl.holes.push_back(hole);
+
+    // Generate 1 shell level
+    auto shells = generatePerimeters(isl, 1, 0.5);
+
+    ASSERT_EQ(shells.size(), 1u);
+    ASSERT_EQ(shells[0].size(), 2u); // Should contain both outer shell and hole shell
+
+    bool foundOuterShell = false;
+    bool foundHoleShell = false;
+
+    for (const auto &poly : shells[0]) {
+        double minX, maxX, minY, maxY;
+        bbox(poly, minX, maxX, minY, maxY);
+        
+        // Outer shell shrinks from 4.0 → 3.5
+        if (std::abs(maxX - 3.5) < 1e-4) {
+            foundOuterShell = true;
+        }
+        // Hole shell shrinks inward from 1.0 → 0.5 (or expands depending on cavity convention)
+        if (std::abs(maxX - 0.5) < 1e-4 || std::abs(maxX - 1.5) < 1e-4) {
+            foundHoleShell = true;
+        }
+    }
+
+    EXPECT_TRUE(foundOuterShell);
+    EXPECT_TRUE(foundHoleShell);
+}

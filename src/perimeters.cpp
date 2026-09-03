@@ -6,31 +6,57 @@ std::vector<std::vector<SliceLayer::Polyline>>
 generatePerimeters(const Island &island, int count, double width) {
   std::vector<std::vector<SliceLayer::Polyline>> result;
 
-  if (island.outer.points.size() < 4)
+  if (island.outer.points.size() < 4 && island.holes.empty())
     return result;
 
-  SliceLayer::Polyline basePoly = island.outer;
-  winding_normalize::toCCW(basePoly);
+  // Prepare outer boundary
+  std::vector<SliceLayer::Polyline> currentOuter;
+  if (island.outer.points.size() >= 4) {
+    SliceLayer::Polyline basePoly = island.outer;
+    winding_normalize::toCCW(basePoly);
+    currentOuter.push_back(basePoly);
+  }
 
-  std::vector<SliceLayer::Polyline> currentPolys = {basePoly};
+  // Prepare hole boundaries (CW orientation)
+  std::vector<SliceLayer::Polyline> currentHoles;
+  for (const auto &hole : island.holes) {
+    if (hole.points.size() >= 4) {
+      SliceLayer::Polyline hPoly = hole;
+      winding_normalize::toCW(hPoly);
+      currentHoles.push_back(hPoly);
+    }
+  }
 
   for (int i = 0; i < count; ++i) {
-    auto shells = offset::offsetLayerPolylines(currentPolys, -width);
-    if (shells.empty())
-      break;
+    std::vector<SliceLayer::Polyline> layerShells;
 
-    bool validFound = false;
-    for (const auto &sh : shells) {
-      if (sh.points.size() >= 4) {
-        validFound = true;
-        break;
+    // Offset outer perimeters inward (-width)
+    if (!currentOuter.empty()) {
+      auto outerShells = offset::offsetLayerPolylines(currentOuter, -width);
+      if (!outerShells.empty()) {
+        layerShells.insert(layerShells.end(), outerShells.begin(), outerShells.end());
+        currentOuter = std::move(outerShells);
+      } else {
+        currentOuter.clear();
       }
     }
-    if (!validFound)
+
+    // Offset hole perimeters outward/inward depending on inner cavity rules (+width or -width)
+    if (!currentHoles.empty()) {
+      auto holeShells = offset::offsetLayerPolylines(currentHoles, width); // positive to shrink hole cavity inward
+      if (!holeShells.empty()) {
+        layerShells.insert(layerShells.end(), holeShells.begin(), holeShells.end());
+        currentHoles = std::move(holeShells);
+      } else {
+        currentHoles.clear();
+      }
+    }
+
+    if (layerShells.empty())
       break;
 
-    result.push_back(shells);
-    currentPolys = std::move(shells);
+    result.push_back(std::move(layerShells));
   }
+
   return result;
 }
