@@ -341,3 +341,57 @@ TEST(Performance, FineSpacing_HighSegmentCount) {
     // 10×10 island at 0.05 spacing → ~200 lines
     EXPECT_GE(segs.size(), 150u);
 }
+
+static Island makeLShape(double z = 0.0) {
+    Island isl;
+    isl.outer.points = {
+        v3(-2.0, -2.0, z),
+        v3( 2.0, -2.0, z),
+        v3( 2.0,  0.0, z),
+        v3( 0.0,  0.0, z),
+        v3( 0.0,  2.0, z),
+        v3(-2.0,  2.0, z),
+        v3(-2.0, -2.0, z)
+    };
+    return isl;
+}
+
+TEST(LineInfill, ConcaveLShape_NoOutOfBoundsSegments) {
+    auto segs = generateLineInfill(makeLShape(), 0.5, 0.0);
+    EXPECT_GE(segs.size(), 1u);
+    for (const auto &s : segs) {
+        double mx = 0.5 * (s.a.getX() + s.b.getX());
+        double my = 0.5 * (s.a.getY() + s.b.getY());
+        // Midpoints must fall within the L-shape bounding zones
+        bool valid = (mx >= -2.0 && mx <= 2.0 && my >= -2.0 && my <= 0.0) ||
+                     (mx >= -2.0 && mx <= 0.0 && my >= 0.0 && my <= 2.0);
+        EXPECT_TRUE(valid) << "Infill segment midpoint fell outside L-shape geometry";
+    }
+}
+
+TEST(EdgeCases, PrimeAngle_Robustness) {
+    auto segs = generateLineInfill(makeSquare(2.0), 0.5, 33.33);
+    EXPECT_GE(segs.size(), 1u);
+    for (const auto &s : segs) {
+        EXPECT_FALSE(std::isnan(s.a.getX()));
+        EXPECT_FALSE(std::isnan(s.b.getY()));
+    }
+}
+
+TEST(EdgeCases, SliverIslandSmallerThanSpacing) {
+    Island isl;
+    isl.outer.points = {
+        v3(-0.1, -2.0, 0.0),
+        v3( 0.1, -2.0, 0.0),
+        v3( 0.1,  2.0, 0.0),
+        v3(-0.1,  2.0, 0.0),
+        v3(-0.1, -2.0, 0.0)
+    };
+    auto segs = generateLineInfill(isl, 0.5, 0.0);
+    EXPECT_EQ(segs.size(), 0u);
+}
+
+TEST(Performance, MicroSpacing_Stability) {
+    auto segs = generateLineInfill(makeSquare(1.0), 0.01, 0.0);
+    EXPECT_GT(segs.size(), 100u);
+}

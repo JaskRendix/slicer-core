@@ -1,16 +1,17 @@
 #include "infill.h"
 #include <cmath>
 #include <limits>
+#include <vector>
 
 // 2D helpers
 struct Vec2 {
   double x, y;
 };
 
-static Vec2 to2(const v3 &p) { return {p.getX(), p.getY()}; }
-static v3 to3(const Vec2 &p, double z) { return v3(p.x, p.y, z); }
+static inline Vec2 to2(const v3 &p) { return {p.getX(), p.getY()}; }
+static inline v3 to3(const Vec2 &p, double z) { return v3(p.x, p.y, z); }
 
-static Vec2 rotate(const Vec2 &p, double c, double s) {
+static inline Vec2 rotate(const Vec2 &p, double c, double s) {
   return {p.x * c - p.y * s, p.x * s + p.y * c};
 }
 
@@ -33,21 +34,22 @@ static bool pointInPoly(const std::vector<Vec2> &poly, const Vec2 &pt) {
 
 static std::vector<Vec2> clipLine(const Vec2 &p0, const Vec2 &p1,
                                   const std::vector<Vec2> &outer,
-                                  const std::vector<std::vector<Vec2>> &holes) {
-  const int steps = 200;
+                                  const std::vector<std::vector<Vec2>> &holes,
+                                  int steps = 150) {
   std::vector<Vec2> samples;
   samples.reserve(steps + 1);
 
   for (int i = 0; i <= steps; ++i) {
-    double t = double(i) / steps;
+    double t = static_cast<double>(i) / steps;
     Vec2 p{p0.x + (p1.x - p0.x) * t, p0.y + (p1.y - p0.y) * t};
     bool insideOuter = pointInPoly(outer, p);
     bool insideHole = false;
-    for (const auto &h : holes)
+    for (const auto &h : holes) {
       if (pointInPoly(h, p)) {
         insideHole = true;
         break;
       }
+    }
     samples.push_back((insideOuter && !insideHole) ? p : Vec2{NAN, NAN});
   }
 
@@ -77,9 +79,7 @@ static std::vector<Vec2> clipLine(const Vec2 &p0, const Vec2 &p1,
 std::vector<InfillSegment>
 generateLineInfill(const Island &island, double spacing, double angleDegrees) {
   std::vector<InfillSegment> out;
-  if (island.outer.points.size() < 4)
-    return out;
-  if (spacing <= 0.0) // ← moved here, was buried inside the loop
+  if (island.outer.points.size() < 4 || spacing <= 0.0)
     return out;
 
   std::vector<Vec2> outer2;
