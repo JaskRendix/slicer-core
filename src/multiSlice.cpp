@@ -68,9 +68,8 @@ std::vector<LayerSlice> sliceMeshMultiLayer(const triangleMesh &mesh,
     SliceLayer layer(z);
     Plane slicePlane(v3(0, 0, 1), z);
     for (const auto &tri : activePool) {
-      lineSegment seg;
-      if (tri.intersectPlane(slicePlane, seg) == 0) {
-        layer.addSegment(seg);
+      if (auto segOpt = tri.intersectPlane(slicePlane, eps)) {
+        layer.addSegment(*segOpt);
       }
     }
 
