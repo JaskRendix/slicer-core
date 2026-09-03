@@ -153,3 +153,143 @@ TEST(TriangleMesh, LoadBinarySTL) {
 
     std::remove(path);
 }
+
+TEST(TriangleMesh, SliceOnPlaneVertex) {
+    triangleMesh mesh;
+
+    // One vertex exactly on z=0, other two straddle
+    mesh.push_back(triangle(
+        v3(0,0,0),
+        v3(1,0,1),
+        v3(0,1,-1),
+        v3(0,0,0)
+    ));
+
+    auto segs = mesh.sliceAtZ(0.0);
+    EXPECT_EQ(segs.size(), 1u);
+}
+
+TEST(TriangleMesh, SliceCoplanarEdgeIgnored) {
+    triangleMesh mesh;
+
+    // Edge p0–p1 lies exactly on z=0 → should NOT produce a segment
+    mesh.push_back(triangle(
+        v3(0,0,0),
+        v3(1,0,0),
+        v3(0,1,1),
+        v3(0,0,0)
+    ));
+
+    auto segs = mesh.sliceAtZ(0.0);
+    EXPECT_EQ(segs.size(), 0u);
+}
+
+TEST(TriangleMesh, SliceThreeIntersectionPointsIgnored) {
+    triangleMesh mesh;
+
+    // One vertex on plane, two edges crossing → 3 intersection points
+    mesh.push_back(triangle(
+        v3(0,0,0),
+        v3(1,0,1),
+        v3(0,1,1),
+        v3(0,0,0)
+    ));
+
+    auto segs = mesh.sliceAtZ(0.0);
+    EXPECT_TRUE(segs.empty());
+}
+
+TEST(TriangleMesh, SliceTinyMeshAdaptiveEpsilon) {
+    triangleMesh mesh;
+
+    mesh.push_back(triangle(
+        v3(0,0,-1e-12),
+        v3(1e-12,0,1e-12),
+        v3(0,1e-12,1e-12),
+        v3(0,0,-1e-12)
+    ));
+
+    auto segs = mesh.sliceAtZ(0.0);
+    EXPECT_EQ(segs.size(), 1u);
+}
+
+TEST(TriangleMesh, SliceHugeMeshAdaptiveEpsilon) {
+    triangleMesh mesh;
+
+    mesh.push_back(triangle(
+        v3(0,0,-1e6),
+        v3(1e6,0,1e6),
+        v3(0,1e6,1e6),
+        v3(0,0,-1e6)
+    ));
+
+    auto segs = mesh.sliceAtZ(0.0);
+    EXPECT_EQ(segs.size(), 1u);
+}
+
+TEST(TriangleMesh, SliceManyTrianglesParallelCorrectness) {
+    triangleMesh mesh;
+
+    for (int i = 0; i < 5000; ++i) {
+        mesh.push_back(triangle(
+            v3(0,0,-1),
+            v3(1,0,1),
+            v3(0,1,1),
+            v3(0,0,-1)
+        ));
+    }
+
+    auto segs = mesh.sliceAtZ(0.0);
+    EXPECT_EQ(segs.size(), 5000u);
+}
+
+TEST(TriangleMesh, LoadAsciiMalformedLinesIgnored) {
+    const char* path = "test_ascii_malformed.stl";
+
+    std::ofstream out(path);
+    out << "facet normal garbage garbage garbage\n";
+    out << "vertex a b c\n";
+    out << "vertex 1 2 3 extra tokens\n";
+    out << "endfacet\n";
+    out.close();
+
+    triangleMesh mesh(path, false);
+
+    // No valid triangle should be parsed
+    EXPECT_EQ(mesh.size(), 0u);
+
+    std::remove(path);
+}
+
+TEST(TriangleMesh, LoadBinaryMultipleTriangles) {
+    const char* path = "test_bin_multi.stl";
+
+    std::ofstream out(path, std::ios::binary);
+
+    char header[80] = {};
+    out.write(header, 80);
+
+    uint32_t nFaces = 3;
+    out.write(reinterpret_cast<char*>(&nFaces), sizeof(uint32_t));
+
+    float tri[12] = {
+        0,0,1,
+        0,0,0,
+        1,0,0,
+        0,1,0
+    };
+
+    for (int i = 0; i < 3; ++i) {
+        out.write(reinterpret_cast<char*>(tri), sizeof(float)*12);
+        uint16_t attr = 0;
+        out.write(reinterpret_cast<char*>(&attr), sizeof(uint16_t));
+    }
+
+    out.close();
+
+    triangleMesh mesh(path, true);
+
+    EXPECT_EQ(mesh.size(), 3u);
+
+    std::remove(path);
+}
