@@ -1,4 +1,5 @@
 #include <iostream>
+#include <algorithm>
 #include "triangleMesh.h"
 #include "sliceLayer.h"
 #include "triangle.h"
@@ -6,8 +7,9 @@
 #include "offset.h"
 #include "multiSlice.h"
 #include "winding.h"
-
-// NEW:
+#include "islands.h"
+#include "perimeters.h"
+#include "infill.h"
 #include "debug_export.h"
 
 // Proper degeneracy check: area == 0 or too few points
@@ -37,8 +39,6 @@ int main() {
     double layerHeight = 0.25;
     auto layers = sliceMeshMultiLayer(mesh, layerHeight);
 
-    double offsetDist = 0.1;
-
     std::cout << "Layers: " << layers.size() << "\n";
 
     size_t layerIndex = 0;
@@ -56,71 +56,64 @@ int main() {
             continue;
         }
 
-        // Print original polylines
-        std::cout << "Original polylines: " << layer.polylines.size() << "\n";
-        for (std::size_t i = 0; i < layer.polylines.size(); ++i) {
-            std::cout << "  Polyline " << i
-                      << "  winding=" << (winding::isCCW(layer.polylines[i]) ? "CCW" : "CW")
-                      << "\n";
-
-            for (auto &p : layer.polylines[i].points) {
-                std::cout << "    (" << p.getX()
-                          << ", " << p.getY()
-                          << ", " << p.getZ() << ")\n";
+        // Normalize winding to CCW for island building if needed
+        auto normalizedPolys = layer.polylines;
+        for (auto &poly : normalizedPolys) {
+            if (!winding::isCCW(poly)) {
+                std::reverse(poly.points.begin(), poly.points.end());
             }
         }
 
-        // Compute offsets
-        auto offsetPolys = offset::offsetLayerPolylines(layer.polylines, offsetDist);
+        // 1. Build Islands (Outer + Holes with AABB pruning)
+        auto islands = buildIslands(normalizedPolys);
+        std::cout << "Islands built: " << islands.size() << "\n";
 
-        // Print offset polylines
-        std::cout << "Offset polylines: " << offsetPolys.size() << "\n";
-        for (std::size_t i = 0; i < offsetPolys.size(); ++i) {
-            std::cout << "  Offset polyline " << i << ":\n";
-            for (auto &p : offsetPolys[i].points) {
-                std::cout << "    (" << p.getX()
-                          << ", " << p.getY()
-                          << ", " << p.getZ() << ")\n";
+        // 2. Generate Perimeters & Infill per island
+        std::vector<std::vector<SliceLayer::Polyline>> allPerims;
+        std::vector<InfillSegment> allInfill;
+
+        for (const auto &island : islands) {
+            auto perims = generatePerimeters(island, 1, 0.1);
+            for (const auto &ring : perims) {
+                allPerims.push_back(ring);
             }
+
+            auto infillSegs = generateGridInfill(island, 0.2);
+            allInfill.insert(allInfill.end(), infillSegs.begin(), infillSegs.end());
         }
 
-        //
-        // === NEW: DEBUG VISUALIZATION EXPORT ===
-        //
+        // 3. Assemble Debug Tagged Polylines for Visualization
         std::vector<mesh_slicing::debug::TaggedPolyline> dbg;
 
-        // Original layer polylines
-        {
-            std::vector<std::vector<v3>> loops;
-            loops.reserve(layer.polylines.size());
-            for (const auto &pl : layer.polylines)
-                loops.push_back(pl.points);
+        auto islandPolys = mesh_slicing::debug::from_islands(islands);
+        dbg.insert(dbg.end(), islandPolys.begin(), islandPolys.end());
 
-            auto tagged = mesh_slicing::debug::from_v3_polylines(loops, "original");
-            dbg.insert(dbg.end(), tagged.begin(), tagged.end());
+        auto perimeterPolys = mesh_slicing::debug::from_perimeters(allPerims);
+        dbg.insert(dbg.end(), perimeterPolys.begin(), perimeterPolys.end());
+
+        for (const auto &seg : allInfill) {
+            mesh_slicing::debug::TaggedPolyline pl;
+            pl.tag = "infill";
+            pl.points.push_back({seg.a.getX(), seg.a.getY()});
+            pl.points.push_back({seg.b.getX(), seg.b.getY()});
+            dbg.push_back(pl);
         }
 
-        // Offset polylines
-        {
-            std::vector<std::vector<v3>> loops;
-            loops.reserve(offsetPolys.size());
-            for (const auto &pl : offsetPolys)
-                loops.push_back(pl.points);
+        // 4. Configure Advanced SVG Export Options
+        mesh_slicing::debug::SvgExportOptions options;
+        options.stroke_width = 0.05;
+        options.draw_grid = true;
+        options.draw_scale_bar = true;
+        options.layer_z = layer.z;
 
-            auto tagged = mesh_slicing::debug::from_v3_polylines(loops, "offset");
-            dbg.insert(dbg.end(), tagged.begin(), tagged.end());
-        }
+        // Export SVG + JSON with metadata for this layer (inside build/ directory)
+        std::string svgName  = "layer_" + std::to_string(layerIndex) + ".svg";
+        std::string jsonName = "layer_" + std::to_string(layerIndex) + ".json";
 
-        // Export SVG + JSON for this layer
-        {
-            std::string svgName  = "layer_" + std::to_string(layerIndex) + ".svg";
-            std::string jsonName = "layer_" + std::to_string(layerIndex) + ".json";
+        mesh_slicing::debug::export_svg(svgName, dbg, options);
+        mesh_slicing::debug::export_json(jsonName, dbg, layer.z);
 
-            mesh_slicing::debug::export_svg(svgName, dbg);
-            mesh_slicing::debug::export_json(jsonName, dbg);
-
-            std::cout << "Exported debug: " << svgName << " and " << jsonName << "\n";
-        }
+        std::cout << "Exported composited debug: " << svgName << " and " << jsonName << "\n";
 
         ++layerIndex;
     }
