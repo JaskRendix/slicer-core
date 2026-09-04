@@ -160,3 +160,109 @@ TEST(SliceLayer, NoInfiniteExtensionOnBadInput) {
 
     ASSERT_EQ(polys.size(), 2u);
 }
+
+TEST(SliceLayer, OpenPolylineCollinearityCleanup) {
+    SliceLayer layer(0.0);
+
+    layer.addSegment(seg(0,0, 1,0));
+    layer.addSegment(seg(1,0, 2,0));
+    layer.addSegment(seg(2,0, 3,1));
+
+    auto polys = layer.buildPolylines();
+
+    ASSERT_EQ(polys.size(), 1u);
+    ASSERT_EQ(polys[0].points.size(), 3u);
+    EXPECT_FALSE(polys[0].is_closed);
+}
+
+TEST(SliceLayer, BowTieShapeDoesNotFormClosedLoop) {
+    SliceLayer layer(0.0);
+
+    layer.addSegment(seg(0,0, 2,2));
+    layer.addSegment(seg(2,0, 0,2));
+
+    auto polys = layer.buildPolylines();
+
+    ASSERT_EQ(polys.size(), 2u);
+    for (auto &p : polys) {
+        EXPECT_FALSE(p.is_closed);
+    }
+}
+
+TEST(SliceLayer, SmallEpsilonKeepsPolylinesDisjoint) {
+    SliceLayer layer(0.0);
+
+    layer.addSegment(seg(0,0, 1,0));
+    layer.addSegment(seg(1 + 1e-5, 0, 2,0));
+
+    auto polys = layer.buildPolylines(1e-7);
+
+    ASSERT_EQ(polys.size(), 2u);
+}
+
+TEST(SliceLayer, DegreeThreeBranchingProducesSeparatePolylines) {
+    SliceLayer layer(0.0);
+
+    layer.addSegment(seg(0,0, 1,0)); // A-B
+    layer.addSegment(seg(1,0, 2,0)); // B-C
+    layer.addSegment(seg(1,0, 1,1)); // B-D (branch)
+
+    auto polys = layer.buildPolylines();
+
+    ASSERT_EQ(polys.size(), 3u);
+}
+
+TEST(SliceLayer, CollinearityCleanupInsideClosedLoop) {
+    SliceLayer layer(0.0);
+
+    layer.addSegment(seg(0,0, 1,0));
+    layer.addSegment(seg(1,0, 2,0));
+    layer.addSegment(seg(2,0, 2,1));
+    layer.addSegment(seg(2,1, 0,1));
+    layer.addSegment(seg(0,1, 0,0));
+
+    auto polys = layer.buildPolylines();
+
+    ASSERT_EQ(polys.size(), 1u);
+    EXPECT_TRUE(polys[0].is_closed);
+    ASSERT_EQ(polys[0].points.size(), 5u);
+}
+
+TEST(SliceLayer, TinyZigZagNoiseIsRemoved) {
+    SliceLayer layer(0.0);
+
+    layer.addSegment(seg(0,0, 1,0));
+    layer.addSegment(seg(1,0, 1,1e-7));
+    layer.addSegment(seg(1,1e-7, 2,0));
+
+    auto polys = layer.buildPolylines(1e-6);
+
+    ASSERT_EQ(polys.size(), 3u);
+}
+
+TEST(SliceLayer, ReverseOrderedSegmentsConnectCorrectly) {
+    SliceLayer layer(0.0);
+
+    layer.addSegment(seg(0,0, 1,0));
+    layer.addSegment(seg(2,0, 1,0)); // reversed direction
+
+    auto polys = layer.buildPolylines();
+
+    ASSERT_EQ(polys.size(), 1u);
+    ASSERT_EQ(polys[0].points.size(), 2u);
+
+    EXPECT_NEAR(polys[0].points.front().getX(), 0.0, 1e-9);
+    EXPECT_NEAR(polys[0].points.back().getX(),  2.0, 1e-9);
+}
+
+TEST(SliceLayer, LargeEpsilonMergesNearbySegments) {
+    SliceLayer layer(0.0);
+
+    layer.addSegment(seg(0,0, 1,0));
+    layer.addSegment(seg(1 + 1e-5, 0, 2,0)); // mergeable with large epsilon
+
+    auto polys = layer.buildPolylines(1e-3);
+
+    ASSERT_EQ(polys.size(), 1u);
+    ASSERT_EQ(polys[0].points.size(), 2u);
+}
