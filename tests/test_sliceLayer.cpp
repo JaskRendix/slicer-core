@@ -7,12 +7,6 @@ static lineSegment seg(double x1, double y1, double x2, double y2, double z=0.0)
     return lineSegment(v3(x1,y1,z), v3(x2,y2,z));
 }
 
-static SliceLayer::Polyline makePolyline(const std::vector<v3> &pts) {
-    SliceLayer::Polyline p;
-    p.points = pts;
-    return p;
-}
-
 TEST(SliceLayer, SingleSegment) {
     SliceLayer layer(0.0);
     layer.addSegment(seg(0,0, 1,0));
@@ -26,12 +20,12 @@ TEST(SliceLayer, SingleSegment) {
 TEST(SliceLayer, TwoConnectedSegments) {
     SliceLayer layer(0.0);
     layer.addSegment(seg(0,0, 1,0));
-    layer.addSegment(seg(1,0, 2,0));
+    layer.addSegment(seg(1,0, 2,0)); // Collinear intermediate point (1,0) is filtered out
 
     auto polys = layer.buildPolylines();
 
     ASSERT_EQ(polys.size(), 1u);
-    ASSERT_EQ(polys[0].points.size(), 3u);
+    ASSERT_EQ(polys[0].points.size(), 2u); // Cleaned down to endpoints (0,0) and (2,0)
 }
 
 TEST(SliceLayer, ClosedLoop) {
@@ -40,29 +34,25 @@ TEST(SliceLayer, ClosedLoop) {
     layer.addSegment(seg(0,0, 1,0));
     layer.addSegment(seg(1,0, 1,1));
     layer.addSegment(seg(1,1, 0,1));
-    layer.addSegment(seg(0,1, 0,0)); // closes loop
+    layer.addSegment(seg(0,1, 0,0));
 
     auto polys = layer.buildPolylines();
 
     ASSERT_EQ(polys.size(), 1u);
+    EXPECT_TRUE(polys[0].is_closed);
 
-    // Should contain 5 points: 4 corners + repeated first
-    ASSERT_EQ(polys[0].points.size(), 5u);
-
-    EXPECT_NEAR(polys[0].points.front().getX(), polys[0].points.back().getX(), 1e-9);
-    EXPECT_NEAR(polys[0].points.front().getY(), polys[0].points.back().getY(), 1e-9);
+    // Duplicate closing endpoint is popped; 4 unique corners remain
+    ASSERT_EQ(polys[0].points.size(), 4u);
 }
 
 TEST(SliceLayer, TwoDisjointLoops) {
     SliceLayer layer(0.0);
 
-    // Loop A
     layer.addSegment(seg(0,0, 1,0));
     layer.addSegment(seg(1,0, 1,1));
     layer.addSegment(seg(1,1, 0,1));
     layer.addSegment(seg(0,1, 0,0));
 
-    // Loop B (shifted)
     layer.addSegment(seg(5,5, 6,5));
     layer.addSegment(seg(6,5, 6,6));
     layer.addSegment(seg(6,6, 5,6));
@@ -84,19 +74,20 @@ TEST(SliceLayer, UnorderedSegments) {
     auto polys = layer.buildPolylines();
 
     ASSERT_EQ(polys.size(), 1u);
-    ASSERT_EQ(polys[0].points.size(), 5u);
+    EXPECT_TRUE(polys[0].is_closed);
+    ASSERT_EQ(polys[0].points.size(), 4u);
 }
 
 TEST(SliceLayer, EpsilonMatching) {
     SliceLayer layer(0.0);
 
     layer.addSegment(seg(0,0, 1,0));
-    layer.addSegment(seg(1 + 1e-7, 0, 2,0)); // tiny mismatch
+    layer.addSegment(seg(1 + 1e-7, 0, 2,0));
 
     auto polys = layer.buildPolylines(1e-6);
 
     ASSERT_EQ(polys.size(), 1u);
-    ASSERT_EQ(polys[0].points.size(), 3u);
+    ASSERT_EQ(polys[0].points.size(), 2u);
 }
 
 TEST(SliceLayer, NoSegments) {
@@ -112,7 +103,7 @@ TEST(SliceLayer, ZeroLengthSegment) {
     auto polys = layer.buildPolylines();
 
     ASSERT_EQ(polys.size(), 1u);
-    ASSERT_EQ(polys[0].points.size(), 2u); // start + end identical
+    ASSERT_EQ(polys[0].points.size(), 2u);
 }
 
 TEST(SliceLayer, MixedOpenClosed) {
@@ -124,21 +115,20 @@ TEST(SliceLayer, MixedOpenClosed) {
     layer.addSegment(seg(1,1, 0,1));
     layer.addSegment(seg(0,1, 0,0));
 
-    // Open polyline
+    // Open polyline with a bend (non-collinear intermediate point)
     layer.addSegment(seg(5,5, 6,5));
-    layer.addSegment(seg(6,5, 7,5));
+    layer.addSegment(seg(6,5, 6,6));
 
     auto polys = layer.buildPolylines();
 
     ASSERT_EQ(polys.size(), 2u);
 
-    // Identify which is which
     bool foundClosed = false;
     bool foundOpen = false;
 
     for (auto &p : polys) {
-        if (p.points.size() == 5) foundClosed = true;
-        if (p.points.size() == 3) foundOpen = true;
+        if (p.is_closed && p.points.size() == 4) foundClosed = true;
+        if (!p.is_closed && p.points.size() == 3) foundOpen = true;
     }
 
     EXPECT_TRUE(foundClosed);
@@ -151,18 +141,18 @@ TEST(SliceLayer, LoopClosureWithEpsilon) {
     layer.addSegment(seg(0,0, 1,0));
     layer.addSegment(seg(1,0, 1,1));
     layer.addSegment(seg(1,1, 0,1));
-    layer.addSegment(seg(0,1, 0,0 + 1e-7)); // slightly off
+    layer.addSegment(seg(0,1, 0,0 + 1e-7));
 
     auto polys = layer.buildPolylines(1e-6);
 
     ASSERT_EQ(polys.size(), 1u);
-    ASSERT_EQ(polys[0].points.size(), 5u);
+    EXPECT_TRUE(polys[0].is_closed);
+    ASSERT_EQ(polys[0].points.size(), 4u);
 }
 
 TEST(SliceLayer, NoInfiniteExtensionOnBadInput) {
     SliceLayer layer(0.0);
 
-    // Two segments that cannot connect
     layer.addSegment(seg(0,0, 1,0));
     layer.addSegment(seg(5,5, 6,5));
 

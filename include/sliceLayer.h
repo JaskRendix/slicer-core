@@ -7,13 +7,14 @@ class SliceLayer {
 public:
   struct Polyline {
     std::vector<v3> points;
+    bool is_closed{false};
   };
 
   explicit SliceLayer(double z) : z_(z) {}
 
   void addSegment(const lineSegment &seg);
 
-  // Build polylines from unordered segments
+  // Build polylines from unordered segments using spatial hashing O(N)
   std::vector<Polyline> buildPolylines(double epsilon = 1e-6) const;
 
 private:
