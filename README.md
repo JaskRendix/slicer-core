@@ -8,11 +8,11 @@ A C++20 library that slices 3D triangle meshes (STL) into 2D layers, handles con
 * Line-based ASCII and binary STL loaders
 * Adaptive epsilon tolerance (scales with mesh bounding box)
 * Winding detection and normalization (CCW outer loops, CW holes)
-* Island building (outer contours + inner holes)
+* Island building (outer contours + inner holes with AABB spatial pruning)
 * Clipper2-based offsetting with multi-fragment handling
 * Perimeters (concurrent outer/hole shelling)
 * Infill patterns: line, grid, hex
-* Debug export to SVG and JSON
+* Advanced debug export to SVG and JSON (batch multi-layer rendering, grid overlays, scale bars, and metadata)
 
 **Dependencies**
 
