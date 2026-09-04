@@ -24,14 +24,44 @@ struct TaggedPolyline {
   std::string tag; // "outer", "hole", "perimeter", "infill", ...
 };
 
-// Export a set of tagged polylines to a simple SVG file.
+// Configuration options for SVG export
+struct SvgExportOptions {
+  double stroke_width = 0.1;
+  bool flip_y = false;
+  bool draw_grid = false;
+  bool draw_scale_bar = false;
+  double layer_z = 0.0;
+};
+
+// Multi-layer container for batch exports
+struct LayerData {
+  double z;
+  std::vector<TaggedPolyline> polylines;
+};
+
+// Export a set of tagged polylines to an SVG file with options.
 void export_svg(const std::string &filename,
                 const std::vector<TaggedPolyline> &polylines,
-                double stroke_width = 0.1);
+                const SvgExportOptions &options = {});
 
-// Export a set of tagged polylines to JSON (for tests / tooling).
+// Backward compatibility overload for stroke width
+void export_svg(const std::string &filename,
+                const std::vector<TaggedPolyline> &polylines,
+                double stroke_width);
+
+// Export a set of tagged polylines to JSON with layer metadata.
 void export_json(const std::string &filename,
-                 const std::vector<TaggedPolyline> &polylines);
+                 const std::vector<TaggedPolyline> &polylines,
+                 double layer_z = 0.0);
+
+// Batch export multiple slices to individual SVG files (e.g., prefix_000.svg)
+void export_layers_svg(const std::string &filename_prefix,
+                       const std::vector<LayerData> &layers,
+                       const SvgExportOptions &options = {});
+
+// Batch export multiple slices to a single JSON file
+void export_layers_json(const std::string &filename,
+                        const std::vector<LayerData> &layers);
 
 // From a generic polyline of v3 (assuming z is constant / ignored)
 std::vector<TaggedPolyline>
