@@ -47,8 +47,8 @@ TEST(Islands, TwoSeparateIslands) {
     auto A = makeSquare(1.0);
     auto B = makeSquare(1.0);
 
-    // Shift B to the right
-    for (auto &p : B.points) p = v3(p.getX() + 5.0, p.getY(), p.getZ());
+    for (auto &p : B.points)
+        p = v3(p.getX() + 5.0, p.getY(), p.getZ());
 
     std::vector<SliceLayer::Polyline> polys = {A, B};
 
@@ -62,7 +62,7 @@ TEST(Islands, TwoSeparateIslands) {
 TEST(Islands, NestedHoles) {
     auto outer = makeSquare(3.0);
     auto hole1 = makeReversed(makeSquare(2.0));
-    auto hole2 = makeReversed(makeSquare(1.0)); // hole inside hole
+    auto hole2 = makeReversed(makeSquare(1.0));
 
     std::vector<SliceLayer::Polyline> polys = {outer, hole1, hole2};
 
@@ -96,4 +96,55 @@ TEST(Islands, MixedWinding) {
 
     ASSERT_EQ(islands.size(), 1u);
     ASSERT_EQ(islands[0].holes.size(), 1u);
+}
+
+TEST(Islands, HoleCentroidOnBoundaryStillInside) {
+    auto outer = makeSquare(2.0);
+
+    SliceLayer::Polyline hole;
+    hole.points = {
+        v3(-1.0, 0.0, 0.0),
+        v3( 1.0, 0.0, 0.0),
+        v3( 1.0, 0.1, 0.0),
+        v3(-1.0, 0.1, 0.0),
+        v3(-1.0, 0.0, 0.0)
+    };
+    hole = makeReversed(hole);
+
+    std::vector<SliceLayer::Polyline> polys = {outer, hole};
+
+    auto islands = buildIslands(polys);
+
+    ASSERT_EQ(islands.size(), 1u);
+    ASSERT_EQ(islands[0].holes.size(), 1u);
+}
+
+TEST(Islands, HoleOutsideAABBNotAssigned) {
+    auto outer = makeSquare(1.0);
+
+    SliceLayer::Polyline hole = makeReversed(makeSquare(0.5));
+    for (auto &p : hole.points)
+        p = v3(p.getX() + 10.0, p.getY(), p.getZ());
+
+    std::vector<SliceLayer::Polyline> polys = {outer, hole};
+
+    auto islands = buildIslands(polys);
+
+    ASSERT_EQ(islands.size(), 1u);
+    EXPECT_EQ(islands[0].holes.size(), 0u);
+}
+
+TEST(Islands, TwoOutersOneHoleAssignedToClosest) {
+    auto A = makeSquare(3.0);
+    auto B = makeSquare(5.0);
+
+    SliceLayer::Polyline hole = makeReversed(makeSquare(1.0));
+
+    std::vector<SliceLayer::Polyline> polys = {A, B, hole};
+
+    auto islands = buildIslands(polys);
+
+    ASSERT_EQ(islands.size(), 2u);
+    ASSERT_EQ(islands[0].holes.size(), 1u);
+    ASSERT_EQ(islands[1].holes.size(), 0u);
 }
